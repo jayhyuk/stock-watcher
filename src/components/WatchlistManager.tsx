@@ -34,7 +34,7 @@ export default function WatchlistManager() {
   const [market, setMarket] = useState("SHZ");
   const [symbol, setSymbol] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingTarget, setLoadingTarget] = useState<"all" | string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
 
@@ -108,35 +108,47 @@ export default function WatchlistManager() {
     if (editingId === id) resetForm();
   }
 
-  async function handleLoad() {
+  async function loadQuotes(
+    targetItems: Array<{ market: string; symbol: string }>,
+  ): Promise<QuoteResponse> {
+    const res = await fetch("/api/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: targetItems }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `Request failed (${res.status})`);
+    }
+
+    return (await res.json()) as QuoteResponse;
+  }
+
+  function mergeQuotes(nextQuotes: StockQuote[]) {
+    setQuotes((prev) => {
+      const merged = { ...prev };
+      for (const quote of nextQuotes) {
+        merged[quoteKey(quote.market, quote.symbol)] = quote;
+      }
+      return merged;
+    });
+  }
+
+  async function handleLoadAll() {
     if (items.length === 0) {
       setError("Add at least one stock before loading quotes.");
       return;
     }
 
-    setLoading(true);
+    setLoadingTarget("all");
     setError(null);
 
     try {
-      const res = await fetch("/api/quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: items.map(({ market, symbol }) => ({ market, symbol })),
-        }),
-      });
-
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `Request failed (${res.status})`);
-      }
-
-      const data = (await res.json()) as QuoteResponse;
-      const next: QuoteMap = {};
-      for (const quote of data.quotes) {
-        next[quoteKey(quote.market, quote.symbol)] = quote;
-      }
-      setQuotes(next);
+      const data = await loadQuotes(
+        items.map(({ market, symbol }) => ({ market, symbol })),
+      );
+      mergeQuotes(data.quotes);
       setLoadedAt(new Date().toLocaleString());
 
       if (data.errors.length > 0) {
@@ -147,7 +159,27 @@ export default function WatchlistManager() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load quotes.");
     } finally {
-      setLoading(false);
+      setLoadingTarget(null);
+    }
+  }
+
+  async function handleLoadOne(item: WatchlistItem) {
+    const key = quoteKey(item.market, item.symbol);
+    setLoadingTarget(key);
+    setError(null);
+
+    try {
+      const data = await loadQuotes([{ market: item.market, symbol: item.symbol }]);
+      mergeQuotes(data.quotes);
+      setLoadedAt(new Date().toLocaleString());
+
+      if (data.errors.length > 0) {
+        setError(data.errors[0].error);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load quote.");
+    } finally {
+      setLoadingTarget(null);
     }
   }
 
@@ -227,11 +259,11 @@ export default function WatchlistManager() {
           </div>
           <button
             type="button"
-            onClick={handleLoad}
-            disabled={loading || items.length === 0}
+            onClick={handleLoadAll}
+            disabled={loadingTarget !== null || items.length === 0}
             className="rounded-lg bg-[var(--accent)] px-6 py-2.5 font-medium text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Loading…" : "Load"}
+            {loadingTarget === "all" ? "Loading all…" : "Load all"}
           </button>
         </div>
 
@@ -288,7 +320,18 @@ export default function WatchlistManager() {
                         <div className="inline-flex gap-2">
                           <button
                             type="button"
+                            onClick={() => handleLoadOne(item)}
+                            disabled={loadingTarget !== null}
+                            className="rounded-md border border-[var(--accent)]/40 px-3 py-1.5 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {loadingTarget === quoteKey(item.market, item.symbol)
+                              ? "Loading…"
+                              : "Load"}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => startEdit(item)}
+                            disabled={loadingTarget !== null}
                             className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface-hover)]"
                           >
                             Edit
@@ -296,6 +339,7 @@ export default function WatchlistManager() {
                           <button
                             type="button"
                             onClick={() => handleDelete(item.id)}
+                            disabled={loadingTarget !== null}
                             className="rounded-md border border-[var(--negative)]/40 px-3 py-1.5 text-xs font-medium text-[var(--negative)] transition hover:bg-[var(--negative)]/10"
                           >
                             Delete
