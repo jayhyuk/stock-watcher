@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { delay, fetchAlphaVantageQuote } from "@/lib/alpha-vantage";
+import { fetchAlphaVantageQuote } from "@/lib/alpha-vantage";
 import type { QuoteResponse } from "@/lib/types";
 
 type QuoteRequestItem = {
   market?: string;
   symbol?: string;
 };
-
-const REQUEST_GAP_MS = 1100;
 
 function normalizeMarket(value: string | undefined): string | null {
   const market = value?.trim().toUpperCase();
@@ -74,9 +72,9 @@ export async function POST(request: NextRequest) {
   }
 
   const response: QuoteResponse = { quotes: [], errors: [] };
+  const validItems: { market: string; symbol: string }[] = [];
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
+  for (const item of items) {
     const market = normalizeMarket(item.market);
     const symbol = normalizeSymbol(item.symbol);
 
@@ -89,20 +87,34 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    if (i > 0) {
-      await delay(REQUEST_GAP_MS);
+    validItems.push({ market, symbol });
+  }
+
+  const quoteResults = await Promise.all(
+    validItems.map(async ({ market, symbol }) => {
+      try {
+        const quote = await fetchAlphaVantageQuote(market, symbol, apiKey);
+        return { ok: true as const, quote };
+      } catch (err) {
+        return {
+          ok: false as const,
+          error: {
+            market,
+            symbol,
+            error: err instanceof Error ? err.message : "Failed to fetch quote",
+          },
+        };
+      }
+    }),
+  );
+
+  for (const result of quoteResults) {
+    if (result.ok) {
+      response.quotes.push(result.quote);
+      continue;
     }
 
-    try {
-      const quote = await fetchAlphaVantageQuote(market, symbol, apiKey);
-      response.quotes.push(quote);
-    } catch (err) {
-      response.errors.push({
-        market,
-        symbol,
-        error: err instanceof Error ? err.message : "Failed to fetch quote",
-      });
-    }
+    response.errors.push(result.error);
   }
 
   return NextResponse.json(response);
