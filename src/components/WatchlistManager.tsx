@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { QuoteResponse, StockQuote, WatchlistItem } from "@/lib/types";
 import {
   createWatchlistItem,
+  exportWatchlist,
+  importWatchlist,
   loadWatchlist,
   saveWatchlist,
 } from "@/lib/watchlist-storage";
@@ -36,6 +38,8 @@ export default function WatchlistManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadingTarget, setLoadingTarget] = useState<"all" | string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [importJson, setImportJson] = useState("");
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +56,39 @@ export default function WatchlistManager() {
     setSymbol("");
     setEditingId(null);
     setError(null);
+  }
+
+  async function handleExport() {
+    setError(null);
+    setNotice(null);
+    try {
+      await navigator.clipboard.writeText(exportWatchlist(items));
+      setNotice("Watchlist JSON copied to clipboard.");
+    } catch {
+      setError("Unable to copy JSON to clipboard.");
+    }
+  }
+
+  function handleImportReplace() {
+    setError(null);
+    setNotice(null);
+
+    if (importJson.trim() === "") {
+      setError("Paste JSON before importing.");
+      return;
+    }
+
+    try {
+      const importedItems = importWatchlist(importJson);
+      persist(importedItems);
+      setQuotes({});
+      setLoadedAt(null);
+      setImportJson("");
+      resetForm();
+      setNotice(`Imported ${importedItems.length} item(s) and replaced the current watchlist.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid JSON.");
+    }
   }
 
   function handleSubmit(e: FormEvent) {
@@ -247,6 +284,48 @@ export default function WatchlistManager() {
             {error}
           </p>
         )}
+        {notice && (
+          <p className="mt-4 rounded-lg border border-[var(--positive)]/30 bg-[var(--positive)]/10 px-4 py-2.5 text-sm text-[var(--positive)]">
+            {notice}
+          </p>
+        )}
+      </section>
+
+      <section className="mb-8 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+        <h2 className="mb-4 text-lg font-semibold">Data transfer</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 font-medium transition hover:bg-[var(--surface-hover)]"
+          >
+            Export JSON
+          </button>
+          <span className="text-sm text-[var(--muted)]">
+            Copies your local watchlist cache as JSON.
+          </span>
+        </div>
+        <div className="mt-4 flex flex-col gap-3">
+          <label className="text-sm font-medium text-[var(--muted)]" htmlFor="import-json">
+            Import JSON (replace current watchlist)
+          </label>
+          <textarea
+            id="import-json"
+            value={importJson}
+            onChange={(e) => setImportJson(e.target.value)}
+            placeholder='Paste an array like [{"id":"...","market":"US","symbol":"AAPL"}]'
+            className="min-h-28 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
+          />
+          <div>
+            <button
+              type="button"
+              onClick={handleImportReplace}
+              className="rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-white transition hover:bg-[var(--accent-hover)]"
+            >
+              Import and replace
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
