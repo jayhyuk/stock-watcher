@@ -42,6 +42,7 @@ export default function WatchlistManager() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [importJson, setImportJson] = useState("");
+  const [showDataTransfer, setShowDataTransfer] = useState(false);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
@@ -310,43 +311,6 @@ export default function WatchlistManager() {
         )}
       </section>
 
-      <section className="mb-8 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-        <h2 className="mb-4 text-lg font-semibold">Data transfer</h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleExport}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 font-medium transition hover:bg-[var(--surface-hover)]"
-          >
-            Export JSON
-          </button>
-          <span className="text-sm text-[var(--muted)]">
-            Copies your local watchlist cache as JSON.
-          </span>
-        </div>
-        <div className="mt-4 flex flex-col gap-3">
-          <label className="text-sm font-medium text-[var(--muted)]" htmlFor="import-json">
-            Import JSON (replace current watchlist)
-          </label>
-          <textarea
-            id="import-json"
-            value={importJson}
-            onChange={(e) => setImportJson(e.target.value)}
-            placeholder='Paste an array like [{"id":"...","market":"US","symbol":"AAPL"}]'
-            className="min-h-28 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
-          />
-          <div>
-            <button
-              type="button"
-              onClick={handleImportReplace}
-              className="rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-white transition hover:bg-[var(--accent-hover)]"
-            >
-              Import and replace
-            </button>
-          </div>
-        </div>
-      </section>
-
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] px-6 py-4">
           <div>
@@ -465,6 +429,56 @@ export default function WatchlistManager() {
         </a>
         {" "}daily close — change is vs the previous trading day.
       </p>
+
+      <section className="mt-10 flex justify-end">
+        <div className="w-full max-w-md">
+          <button
+            type="button"
+            onClick={() => setShowDataTransfer((prev) => !prev)}
+            className="ml-auto block rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--surface-hover)]"
+          >
+            Data transfer menu
+          </button>
+
+          {showDataTransfer && (
+            <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="rounded-lg border border-[var(--border)] px-4 py-2 font-medium transition hover:bg-[var(--surface-hover)]"
+                >
+                  Export JSON
+                </button>
+                <span className="text-sm text-[var(--muted)]">
+                  Copies your local watchlist cache as JSON.
+                </span>
+              </div>
+              <div className="mt-4 flex flex-col gap-3">
+                <label className="text-sm font-medium text-[var(--muted)]" htmlFor="import-json">
+                  Import JSON (replace current watchlist)
+                </label>
+                <textarea
+                  id="import-json"
+                  value={importJson}
+                  onChange={(e) => setImportJson(e.target.value)}
+                  placeholder='Paste an array like [{"id":"...","market":"US","symbol":"AAPL"}]'
+                  className="min-h-28 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
+                />
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleImportReplace}
+                    className="rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-white transition hover:bg-[var(--accent-hover)]"
+                  >
+                    Import and replace
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
