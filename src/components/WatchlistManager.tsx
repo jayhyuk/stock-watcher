@@ -4,7 +4,9 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { QuoteResponse, StockQuote, WatchlistItem } from "@/lib/types";
 import {
   createWatchlistItem,
+  loadQuoteCache,
   loadWatchlist,
+  saveQuoteCache,
   saveWatchlist,
 } from "@/lib/watchlist-storage";
 
@@ -37,10 +39,27 @@ export default function WatchlistManager() {
   const [loadingTarget, setLoadingTarget] = useState<"all" | string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setItems(loadWatchlist());
+    const cachedItems = loadWatchlist();
+    const cachedQuotes = loadQuoteCache();
+    const nextQuotes: QuoteMap = {};
+
+    for (const quote of cachedQuotes.quotes) {
+      nextQuotes[quoteKey(quote.market, quote.symbol)] = quote;
+    }
+
+    setItems(cachedItems);
+    setQuotes(nextQuotes);
+    setLoadedAt(cachedQuotes.loadedAt);
+    setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveQuoteCache({ quotes: Object.values(quotes), loadedAt });
+  }, [quotes, loadedAt, hydrated]);
 
   const persist = useCallback((next: WatchlistItem[]) => {
     setItems(next);
