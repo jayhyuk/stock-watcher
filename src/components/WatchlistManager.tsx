@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { QuoteResponse, StockQuote, WatchlistItem } from "@/lib/types";
 import {
   createWatchlistItem,
@@ -45,6 +45,18 @@ export default function WatchlistManager() {
   const [showDataTransfer, setShowDataTransfer] = useState(false);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    }
+    if (openMenuId) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMenuId]);
 
   useEffect(() => {
     const cachedItems = loadWatchlist();
@@ -368,6 +380,7 @@ export default function WatchlistManager() {
                 const lastSeen = quote?.lastSeen;
                 const isPositive = lastSeen ? lastSeen.change >= 0 : null;
                 const itemKey = quoteKey(item.market, item.symbol);
+                const menuOpen = openMenuId === item.id;
 
                 return (
                   <li key={item.id} className="px-4 py-4">
@@ -401,31 +414,43 @@ export default function WatchlistManager() {
                           <span className="mt-1 block text-sm text-[var(--muted)]">—</span>
                         )}
                       </div>
-                      <div className="flex shrink-0 flex-col gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
                           onClick={() => handleLoadOne(item)}
                           disabled={loadingTarget !== null}
-                          className="rounded-md border border-[var(--accent)]/40 px-3 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:opacity-50"
+                          className="rounded-md border border-[var(--accent)]/40 px-3 py-1.5 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:opacity-50"
                         >
                           {loadingTarget === itemKey ? "…" : "Load"}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => startEdit(item)}
-                          disabled={loadingTarget !== null}
-                          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs font-medium transition hover:bg-[var(--surface-hover)]"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(item.id)}
-                          disabled={loadingTarget !== null}
-                          className="rounded-md border border-[var(--negative)]/40 px-3 py-1 text-xs font-medium text-[var(--negative)] transition hover:bg-[var(--negative)]/10"
-                        >
-                          Del
-                        </button>
+                        <div className="relative" ref={menuOpen ? menuRef : null}>
+                          <button
+                            type="button"
+                            onClick={() => setOpenMenuId(menuOpen ? null : item.id)}
+                            className="rounded-md border border-[var(--border)] px-2 py-1.5 text-sm leading-none transition hover:bg-[var(--surface-hover)]"
+                            aria-label="More actions"
+                          >
+                            ⋮
+                          </button>
+                          {menuOpen && (
+                            <div className="absolute right-0 top-full z-10 mt-1 min-w-[100px] rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => { startEdit(item); setOpenMenuId(null); }}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--surface-hover)]"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { handleDelete(item.id); setOpenMenuId(null); }}
+                                className="w-full px-4 py-2 text-left text-sm text-[var(--negative)] hover:bg-[var(--negative)]/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </li>
@@ -449,6 +474,7 @@ export default function WatchlistManager() {
                     const quote = quotes[quoteKey(item.market, item.symbol)];
                     const lastSeen = quote?.lastSeen;
                     const lastSeenPositive = lastSeen ? lastSeen.change >= 0 : null;
+                    const menuOpen = openMenuId === item.id;
 
                     return (
                       <tr
@@ -479,33 +505,43 @@ export default function WatchlistManager() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="inline-flex gap-2">
+                          <div className="inline-flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => handleLoadOne(item)}
                               disabled={loadingTarget !== null}
                               className="rounded-md border border-[var(--accent)]/40 px-3 py-1.5 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {loadingTarget === quoteKey(item.market, item.symbol)
-                                ? "Loading…"
-                                : "Load"}
+                              {loadingTarget === quoteKey(item.market, item.symbol) ? "Loading…" : "Load"}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => startEdit(item)}
-                              disabled={loadingTarget !== null}
-                              className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface-hover)]"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(item.id)}
-                              disabled={loadingTarget !== null}
-                              className="rounded-md border border-[var(--negative)]/40 px-3 py-1.5 text-xs font-medium text-[var(--negative)] transition hover:bg-[var(--negative)]/10"
-                            >
-                              Delete
-                            </button>
+                            <div className="relative" ref={menuOpen ? menuRef : null}>
+                              <button
+                                type="button"
+                                onClick={() => setOpenMenuId(menuOpen ? null : item.id)}
+                                className="rounded-md border border-[var(--border)] px-2 py-1.5 text-sm leading-none transition hover:bg-[var(--surface-hover)]"
+                                aria-label="More actions"
+                              >
+                                ⋮
+                              </button>
+                              {menuOpen && (
+                                <div className="absolute right-0 top-full z-10 mt-1 min-w-[100px] rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => { startEdit(item); setOpenMenuId(null); }}
+                                    className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--surface-hover)]"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { handleDelete(item.id); setOpenMenuId(null); }}
+                                    className="w-full px-4 py-2 text-left text-sm text-[var(--negative)] hover:bg-[var(--negative)]/10"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
