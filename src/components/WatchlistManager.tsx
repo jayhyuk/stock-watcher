@@ -334,100 +334,175 @@ export default function WatchlistManager() {
             No stocks yet. Add one above to get started.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[var(--muted)]">
-                  <th className="px-6 py-3 font-medium">Market</th>
-                  <th className="px-6 py-3 font-medium">Symbol</th>
-                  <th className="px-6 py-3 font-medium text-right">Last seen</th>
-                  <th className="px-6 py-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => {
-                  const quote = quotes[quoteKey(item.market, item.symbol)];
-                  const lastSeen = quote?.lastSeen;
-                  const lastSeenPositive = lastSeen ? lastSeen.change >= 0 : null;
+          <>
+            {/* Mobile cards */}
+            <ul className="divide-y divide-[var(--border)] sm:hidden">
+              {items.map((item) => {
+                const quote = quotes[quoteKey(item.market, item.symbol)];
+                const lastSeen = quote?.lastSeen;
+                const isPositive = lastSeen ? lastSeen.change >= 0 : null;
+                const itemKey = quoteKey(item.market, item.symbol);
 
-                  return (
-                    <tr
-                      key={item.id}
-                      className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--surface-hover)]/50"
-                    >
-                      <td className="px-6 py-4 font-medium">{item.market}</td>
-                      <td className="px-6 py-4 font-mono">{item.symbol}</td>
-                      <td className="px-6 py-4 text-right font-mono">
+                return (
+                  <li key={item.id} className="px-4 py-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 text-xs font-medium text-[var(--muted)]">
+                            {item.market}
+                          </span>
+                          <span className="font-mono font-semibold">{item.symbol}</span>
+                        </div>
                         {lastSeen ? (
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className="text-xs text-[var(--muted)]">{lastSeen.date}</span>
-                            <span>{formatPrice(lastSeen.price, lastSeen.currency)}</span>
+                          <div className="mt-1.5 font-mono">
+                            <span className="text-base font-semibold">
+                              {formatPrice(lastSeen.price, lastSeen.currency)}
+                            </span>
                             <span
-                              className={
-                                lastSeenPositive
+                              className={`ml-2 text-sm ${
+                                isPositive
                                   ? "text-[var(--positive)]"
-                                  : lastSeenPositive === false
+                                  : isPositive === false
                                     ? "text-[var(--negative)]"
                                     : "text-[var(--muted)]"
-                              }
+                              }`}
                             >
                               {formatChange(lastSeen.change, lastSeen.changePercent)}
                             </span>
+                            <div className="text-xs text-[var(--muted)]">{lastSeen.date}</div>
                           </div>
                         ) : (
-                          <span className="text-[var(--muted)]">—</span>
+                          <span className="mt-1 block text-sm text-[var(--muted)]">—</span>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="inline-flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleLoadOne(item)}
-                            disabled={loadingTarget !== null}
-                            className="rounded-md border border-[var(--accent)]/40 px-3 py-1.5 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {loadingTarget === quoteKey(item.market, item.symbol)
-                              ? "Loading…"
-                              : "Load"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => startEdit(item)}
-                            disabled={loadingTarget !== null}
-                            className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface-hover)]"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(item.id)}
-                            disabled={loadingTarget !== null}
-                            className="rounded-md border border-[var(--negative)]/40 px-3 py-1.5 text-xs font-medium text-[var(--negative)] transition hover:bg-[var(--negative)]/10"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadOne(item)}
+                          disabled={loadingTarget !== null}
+                          className="rounded-md border border-[var(--accent)]/40 px-3 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:opacity-50"
+                        >
+                          {loadingTarget === itemKey ? "…" : "Load"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          disabled={loadingTarget !== null}
+                          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs font-medium transition hover:bg-[var(--surface-hover)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item.id)}
+                          disabled={loadingTarget !== null}
+                          className="rounded-md border border-[var(--negative)]/40 px-3 py-1 text-xs font-medium text-[var(--negative)] transition hover:bg-[var(--negative)]/10"
+                        >
+                          Del
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-[var(--muted)]">
+                    <th className="px-6 py-3 font-medium">Market</th>
+                    <th className="px-6 py-3 font-medium">Symbol</th>
+                    <th className="px-6 py-3 font-medium text-right">Last seen</th>
+                    <th className="px-6 py-3 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const quote = quotes[quoteKey(item.market, item.symbol)];
+                    const lastSeen = quote?.lastSeen;
+                    const lastSeenPositive = lastSeen ? lastSeen.change >= 0 : null;
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--surface-hover)]/50"
+                      >
+                        <td className="px-6 py-4 font-medium">{item.market}</td>
+                        <td className="px-6 py-4 font-mono">{item.symbol}</td>
+                        <td className="px-6 py-4 text-right font-mono">
+                          {lastSeen ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-xs text-[var(--muted)]">{lastSeen.date}</span>
+                              <span>{formatPrice(lastSeen.price, lastSeen.currency)}</span>
+                              <span
+                                className={
+                                  lastSeenPositive
+                                    ? "text-[var(--positive)]"
+                                    : lastSeenPositive === false
+                                      ? "text-[var(--negative)]"
+                                      : "text-[var(--muted)]"
+                                }
+                              >
+                                {formatChange(lastSeen.change, lastSeen.changePercent)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[var(--muted)]">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="inline-flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleLoadOne(item)}
+                              disabled={loadingTarget !== null}
+                              className="rounded-md border border-[var(--accent)]/40 px-3 py-1.5 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {loadingTarget === quoteKey(item.market, item.symbol)
+                                ? "Loading…"
+                                : "Load"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(item)}
+                              disabled={loadingTarget !== null}
+                              className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface-hover)]"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(item.id)}
+                              disabled={loadingTarget !== null}
+                              className="rounded-md border border-[var(--negative)]/40 px-3 py-1.5 text-xs font-medium text-[var(--negative)] transition hover:bg-[var(--negative)]/10"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
       <p className="mt-6 text-center text-xs text-[var(--muted)]">
         Prices from{" "}
         <a
-          href="https://www.alphavantage.co/documentation/"
+          href="https://finance.yahoo.com"
           className="text-[var(--accent)] hover:underline"
           target="_blank"
           rel="noreferrer"
         >
-          Alpha Vantage
+          Yahoo Finance
         </a>
-        {" "}daily close — change is vs the previous trading day.
+        {" "}— change is vs the previous trading day.
       </p>
 
       <section className="mt-10 flex justify-end">
