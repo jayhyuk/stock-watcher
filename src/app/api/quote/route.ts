@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchAlphaVantageQuote } from "@/lib/alpha-vantage";
+import { fetchYahooFinanceQuote } from "@/lib/yahoo-finance";
 import type { QuoteResponse } from "@/lib/types";
 
 type QuoteRequestItem = {
@@ -17,14 +17,6 @@ function normalizeSymbol(value: string | undefined): string | null {
   return symbol ? symbol : null;
 }
 
-function getApiKey(): string {
-  const apiKey = process.env.ALPHAVANTAGE_API_KEY;
-  if (!apiKey) {
-    throw new Error("ALPHAVANTAGE_API_KEY is not configured");
-  }
-  return apiKey;
-}
-
 /** GET /api/quote?market=SHZ&symbol=000807 */
 export async function GET(request: NextRequest) {
   const market = normalizeMarket(request.nextUrl.searchParams.get("market") ?? undefined);
@@ -38,7 +30,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const quote = await fetchAlphaVantageQuote(market, symbol, getApiKey());
+    const quote = await fetchYahooFinanceQuote(market, symbol);
     return NextResponse.json(quote);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch quote";
@@ -63,14 +55,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let apiKey: string;
-  try {
-    apiKey = getApiKey();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "API key missing";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-
   const response: QuoteResponse = { quotes: [], errors: [] };
   const validItems: { market: string; symbol: string }[] = [];
 
@@ -93,7 +77,7 @@ export async function POST(request: NextRequest) {
   const quoteResults = await Promise.all(
     validItems.map(async ({ market, symbol }) => {
       try {
-        const quote = await fetchAlphaVantageQuote(market, symbol, apiKey);
+        const quote = await fetchYahooFinanceQuote(market, symbol);
         return { ok: true as const, quote };
       } catch (err) {
         return {
