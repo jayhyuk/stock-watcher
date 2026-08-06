@@ -22,7 +22,19 @@ const MARKET_CURRENCY: Record<string, string> = {
   SHH: "CNY",
 };
 
+/**
+ * Chinese A-shares: prefix 6xx → Shanghai (.SS), 0xx/3xx → Shenzhen (.SZ).
+ * Both SHH and SHZ market codes go through this auto-detection so a stock
+ * tagged with the wrong exchange still resolves correctly.
+ */
+function chineseSuffix(symbol: string): string {
+  return symbol.startsWith("6") ? ".SS" : ".SZ";
+}
+
 export function toYahooSymbol(market: string, symbol: string): string {
+  if (market === "SHZ" || market === "SHH") {
+    return `${symbol}${chineseSuffix(symbol)}`;
+  }
   const suffix = MARKET_SUFFIX[market] ?? "";
   return `${symbol}${suffix}`;
 }
