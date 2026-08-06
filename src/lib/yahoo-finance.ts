@@ -43,16 +43,15 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+type YahooChartMeta = {
+  currency?: string;
+  regularMarketPrice?: number;
+  regularMarketTime?: number;
+  chartPreviousClose?: number;
+};
+
 type YahooChartResult = {
-  meta: {
-    currency?: string;
-  };
-  timestamp?: number[];
-  indicators?: {
-    quote?: Array<{
-      close?: (number | null)[];
-    }>;
-  };
+  meta: YahooChartMeta;
 };
 
 type YahooChartResponse = {
@@ -93,40 +92,28 @@ export async function fetchYahooFinanceQuote(
     throw new Error("No chart data in Yahoo Finance response");
   }
 
-  const closes = result.indicators?.quote?.[0]?.close ?? [];
-  const timestamps = result.timestamp ?? [];
-
-  // Collect last two valid (non-null) closes
-  const valid: { date: string; price: number }[] = [];
-  for (let i = closes.length - 1; i >= 0 && valid.length < 2; i--) {
-    const price = closes[i];
-    if (price != null && !Number.isNaN(price)) {
-      const date = new Date(timestamps[i] * 1000).toISOString().split("T")[0];
-      valid.push({ date, price });
-    }
+  const meta = result.meta;
+  const price = meta.regularMarketPrice;
+  if (price == null || Number.isNaN(price)) {
+    throw new Error("No regularMarketPrice in Yahoo Finance response");
   }
 
-  if (valid.length < 1) {
-    throw new Error("No valid close prices in Yahoo Finance response");
-  }
+  const marketTime = meta.regularMarketTime;
+  const date = marketTime
+    ? new Date(marketTime * 1000).toISOString().split("T")[0]
+    : new Date().toISOString().split("T")[0];
 
-  const currency = result.meta.currency ?? MARKET_CURRENCY[market] ?? "USD";
-  const latest = valid[0];
-  let change = 0;
-  let changePercent = 0;
-
-  if (valid.length >= 2) {
-    const prior = valid[1].price;
-    change = round2(latest.price - prior);
-    changePercent = prior === 0 ? 0 : round2((change / prior) * 100);
-  }
+  const currency = meta.currency ?? MARKET_CURRENCY[market] ?? "USD";
+  const priorClose = meta.chartPreviousClose ?? 0;
+  const change = round2(price - priorClose);
+  const changePercent = priorClose === 0 ? 0 : round2((change / priorClose) * 100);
 
   return {
     market,
     symbol,
     lastSeen: {
-      date: latest.date,
-      price: latest.price,
+      date,
+      price,
       change,
       changePercent,
       currency,
