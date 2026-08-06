@@ -240,6 +240,12 @@ export default function WatchlistManager() {
     }
   }
 
+  const loadedQuotes = Object.values(quotes);
+  const avgChangePercent =
+    loadedQuotes.length > 0
+      ? loadedQuotes.reduce((sum, q) => sum + q.lastSeen.changePercent, 0) / loadedQuotes.length
+      : null;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <header className="mb-8">
@@ -248,6 +254,26 @@ export default function WatchlistManager() {
           Add stocks by market and symbol, then load prices from the API.
         </p>
       </header>
+
+      {avgChangePercent !== null && (
+        <div
+          className={`mb-6 rounded-xl border px-6 py-4 ${
+            avgChangePercent >= 0
+              ? "border-[var(--positive)]/30 bg-[var(--positive)]/10"
+              : "border-[var(--negative)]/30 bg-[var(--negative)]/10"
+          }`}
+        >
+          <p className="text-sm text-[var(--muted)]">Average change today ({loadedQuotes.length} stocks)</p>
+          <p
+            className={`text-3xl font-bold tracking-tight ${
+              avgChangePercent >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"
+            }`}
+          >
+            {avgChangePercent >= 0 ? "+" : ""}
+            {avgChangePercent.toFixed(2)}%
+          </p>
+        </div>
+      )}
 
       <section className="mb-8 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <h2 className="mb-4 text-lg font-semibold">
