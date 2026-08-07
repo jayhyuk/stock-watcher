@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { QuoteResponse, StockQuote, WatchlistItem } from "@/lib/types";
 import {
   createWatchlistItem,
@@ -46,13 +46,13 @@ export default function WatchlistManager() {
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpenMenuId(null);
-      }
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target || !openMenuId) return;
+      if (target.closest(`[data-menu-id="${openMenuId}"]`)) return;
+      setOpenMenuId(null);
     }
     if (openMenuId) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -423,7 +423,7 @@ export default function WatchlistManager() {
                         >
                           {loadingTarget === itemKey ? "…" : "Load"}
                         </button>
-                        <div className="relative" ref={menuOpen ? menuRef : null}>
+                        <div className="relative" data-menu-id={item.id}>
                           <button
                             type="button"
                             onClick={() => setOpenMenuId(menuOpen ? null : item.id)}
@@ -514,7 +514,7 @@ export default function WatchlistManager() {
                             >
                               {loadingTarget === quoteKey(item.market, item.symbol) ? "Loading…" : "Load"}
                             </button>
-                            <div className="relative" ref={menuOpen ? menuRef : null}>
+                            <div className="relative" data-menu-id={item.id}>
                               <button
                                 type="button"
                                 onClick={() => setOpenMenuId(menuOpen ? null : item.id)}
