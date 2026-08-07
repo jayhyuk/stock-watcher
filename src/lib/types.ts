@@ -1,5 +1,6 @@
 export type WatchlistItem = {
   id: string;
+  tabId: string;
   market: string;
   symbol: string;
 };

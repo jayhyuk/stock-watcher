@@ -7,9 +7,12 @@ import {
   exportWatchlist,
   importWatchlist,
   loadQuoteCache,
+  loadWatchTabs,
   loadWatchlist,
   saveQuoteCache,
+  saveWatchTabs,
   saveWatchlist,
+  type WatchlistTab,
 } from "@/lib/watchlist-storage";
 
 type QuoteMap = Record<string, StockQuote>;
@@ -31,9 +34,13 @@ function formatChange(change: number, changePercent: number): string {
 }
 
 const MARKET_OPTIONS = ["SHZ", "SHH", "US", "HK", "TH", "JP", "SG"];
+const DEFAULT_TAB_ID = "tab-1";
+const DEFAULT_TAB_NAME = "Tab 1";
 
 export default function WatchlistManager() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [tabs, setTabs] = useState<WatchlistTab[]>([{ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME }]);
+  const [activeTabId, setActiveTabId] = useState(DEFAULT_TAB_ID);
   const [quotes, setQuotes] = useState<QuoteMap>({});
   const [market, setMarket] = useState("SHZ");
   const [symbol, setSymbol] = useState("");
@@ -60,6 +67,7 @@ export default function WatchlistManager() {
 
   useEffect(() => {
     const cachedItems = loadWatchlist();
+    const cachedTabs = loadWatchTabs();
     const cachedQuotes = loadQuoteCache();
     const nextQuotes: QuoteMap = {};
 
@@ -67,7 +75,24 @@ export default function WatchlistManager() {
       nextQuotes[quoteKey(quote.market, quote.symbol)] = quote;
     }
 
+    const tabMap = new Map<string, WatchlistTab>();
+    for (const tab of cachedTabs) {
+      tabMap.set(tab.id, tab);
+    }
+    if (!tabMap.has(DEFAULT_TAB_ID)) {
+      tabMap.set(DEFAULT_TAB_ID, { id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME });
+    }
+    for (const item of cachedItems) {
+      if (!tabMap.has(item.tabId)) {
+        tabMap.set(item.tabId, { id: item.tabId, name: `Tab ${tabMap.size + 1}` });
+      }
+    }
+    const resolvedTabs = Array.from(tabMap.values());
+
     setItems(cachedItems);
+    setTabs(resolvedTabs);
+    setActiveTabId(resolvedTabs[0]?.id ?? DEFAULT_TAB_ID);
+    saveWatchTabs(resolvedTabs);
     setQuotes(nextQuotes);
     setLoadedAt(cachedQuotes.loadedAt);
     setHydrated(true);
@@ -82,6 +107,30 @@ export default function WatchlistManager() {
     setItems(next);
     saveWatchlist(next);
   }, []);
+
+  const persistTabs = useCallback((next: WatchlistTab[]) => {
+    setTabs(next);
+    saveWatchTabs(next);
+  }, []);
+
+  const ensureTabsForItems = useCallback(
+    (nextItems: WatchlistItem[], baseTabs: WatchlistTab[]): WatchlistTab[] => {
+      const tabMap = new Map<string, WatchlistTab>();
+      for (const tab of baseTabs) {
+        tabMap.set(tab.id, tab);
+      }
+      if (!tabMap.has(DEFAULT_TAB_ID)) {
+        tabMap.set(DEFAULT_TAB_ID, { id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME });
+      }
+      for (const item of nextItems) {
+        if (!tabMap.has(item.tabId)) {
+          tabMap.set(item.tabId, { id: item.tabId, name: `Tab ${tabMap.size + 1}` });
+        }
+      }
+      return Array.from(tabMap.values());
+    },
+    [],
+  );
 
   function resetForm() {
     setMarket("SHZ");
@@ -113,6 +162,9 @@ export default function WatchlistManager() {
     try {
       const importedItems = importWatchlist(importJson);
       persist(importedItems);
+      const nextTabs = ensureTabsForItems(importedItems, tabs);
+      persistTabs(nextTabs);
+      setActiveTabId(nextTabs[0]?.id ?? DEFAULT_TAB_ID);
       setQuotes({});
       setLoadedAt(null);
       setImportJson("");
@@ -138,6 +190,7 @@ export default function WatchlistManager() {
 
     const duplicate = items.some(
       (item) =>
+        item.tabId === activeTabId &&
         item.market === normalizedMarket &&
         item.symbol === normalizedSymbol &&
         item.id !== editingId,
@@ -158,7 +211,7 @@ export default function WatchlistManager() {
     } else {
       persist([
         ...items,
-        createWatchlistItem(normalizedMarket, normalizedSymbol),
+        createWatchlistItem(normalizedMarket, normalizedSymbol, activeTabId),
       ]);
     }
 
@@ -175,6 +228,19 @@ export default function WatchlistManager() {
   function handleDelete(id: string) {
     persist(items.filter((item) => item.id !== id));
     if (editingId === id) resetForm();
+  }
+
+  function handleAddTab() {
+    const nextTabNumber = tabs.length + 1;
+    const nextTab: WatchlistTab = {
+      id: `tab-${Date.now()}`,
+      name: `Tab ${nextTabNumber}`,
+    };
+    const nextTabs = [...tabs, nextTab];
+    persistTabs(nextTabs);
+    setActiveTabId(nextTab.id);
+    setOpenMenuId(null);
+    resetForm();
   }
 
   async function loadQuotes(
@@ -205,7 +271,8 @@ export default function WatchlistManager() {
   }
 
   async function handleLoadAll() {
-    if (items.length === 0) {
+    const activeItems = items.filter((item) => item.tabId === activeTabId);
+    if (activeItems.length === 0) {
       setError("Add at least one stock before loading quotes.");
       return;
     }
@@ -215,7 +282,7 @@ export default function WatchlistManager() {
 
     try {
       const data = await loadQuotes(
-        items.map(({ market, symbol }) => ({ market, symbol })),
+        activeItems.map(({ market, symbol }) => ({ market, symbol })),
       );
       mergeQuotes(data.quotes);
       setLoadedAt(new Date().toLocaleString());
@@ -252,11 +319,15 @@ export default function WatchlistManager() {
     }
   }
 
-  const loadedQuotes = Object.values(quotes);
+  const activeItems = items.filter((item) => item.tabId === activeTabId);
+  const loadedQuotes = activeItems
+    .map((item) => quotes[quoteKey(item.market, item.symbol)])
+    .filter((quote): quote is StockQuote => Boolean(quote));
   const avgChangePercent =
     loadedQuotes.length > 0
       ? loadedQuotes.reduce((sum, q) => sum + q.lastSeen.changePercent, 0) / loadedQuotes.length
       : null;
+  const activeTabName = tabs.find((tab) => tab.id === activeTabId)?.name ?? DEFAULT_TAB_NAME;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -266,6 +337,37 @@ export default function WatchlistManager() {
           Add stocks by market and symbol, then load prices from the API.
         </p>
       </header>
+
+      <section className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setActiveTabId(tab.id);
+                setOpenMenuId(null);
+                setEditingId(null);
+                setError(null);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                activeTabId === tab.id
+                  ? "bg-[var(--accent)] text-white"
+                  : "border border-[var(--border)] hover:bg-[var(--surface-hover)]"
+              }`}
+            >
+              {tab.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={handleAddTab}
+            className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium transition hover:bg-[var(--surface-hover)]"
+          >
+            + New tab
+          </button>
+        </div>
+      </section>
 
       {avgChangePercent !== null && (
         <div
@@ -289,7 +391,7 @@ export default function WatchlistManager() {
 
       <section className="mb-8 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <h2 className="mb-4 text-lg font-semibold">
-          {editingId ? "Edit stock" : "Add stock"}
+          {editingId ? `Edit stock in ${activeTabName}` : `Add stock to ${activeTabName}`}
         </h2>
         <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
           <label className="flex min-w-[120px] flex-1 flex-col gap-1.5">
@@ -352,7 +454,7 @@ export default function WatchlistManager() {
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold">Watchlist</h2>
+            <h2 className="text-lg font-semibold">Watchlist - {activeTabName}</h2>
             {loadedAt && (
               <p className="text-sm text-[var(--muted)]">Last loaded: {loadedAt}</p>
             )}
@@ -360,22 +462,22 @@ export default function WatchlistManager() {
           <button
             type="button"
             onClick={handleLoadAll}
-            disabled={loadingTarget !== null || items.length === 0}
+            disabled={loadingTarget !== null || activeItems.length === 0}
             className="rounded-lg bg-[var(--accent)] px-6 py-2.5 font-medium text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loadingTarget === "all" ? "Loading all…" : "Load all"}
           </button>
         </div>
 
-        {items.length === 0 ? (
+        {activeItems.length === 0 ? (
           <p className="px-6 py-10 text-center text-[var(--muted)]">
-            No stocks yet. Add one above to get started.
+            No stocks in {activeTabName} yet. Add one above to get started.
           </p>
         ) : (
           <>
             {/* Mobile cards */}
             <ul className="divide-y divide-[var(--border)] sm:hidden">
-              {items.map((item) => {
+              {activeItems.map((item) => {
                 const quote = quotes[quoteKey(item.market, item.symbol)];
                 const lastSeen = quote?.lastSeen;
                 const isPositive = lastSeen ? lastSeen.change >= 0 : null;
@@ -470,7 +572,7 @@ export default function WatchlistManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => {
+                  {activeItems.map((item) => {
                     const quote = quotes[quoteKey(item.market, item.symbol)];
                     const lastSeen = quote?.lastSeen;
                     const lastSeenPositive = lastSeen ? lastSeen.change >= 0 : null;
