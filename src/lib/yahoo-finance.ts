@@ -52,6 +52,10 @@ type YahooChartMeta = {
 
 type YahooChartResult = {
   meta: YahooChartMeta;
+  timestamp?: number[];
+  indicators?: {
+    quote?: { close?: (number | null)[] }[];
+  };
 };
 
 type YahooChartResponse = {
@@ -63,6 +67,37 @@ type YahooChartResponse = {
     } | null;
   };
 };
+
+/**
+ * `meta.chartPreviousClose` is unreliable — it can reflect a different close
+ * (e.g. from a stale cache) than the actual daily bars in the chart series.
+ * Derive the true previous close from the daily `close` array instead: the
+ * last non-null entry is today's close (matches `regularMarketPrice`), and
+ * the one before it is the previous trading day's close.
+ */
+function derivePriorClose(result: YahooChartResult, latestPrice: number): number | undefined {
+  const closes = result.indicators?.quote?.[0]?.close;
+  if (!closes || closes.length === 0) return undefined;
+
+  const nonNullIndexes: number[] = [];
+  closes.forEach((c, i) => {
+    if (c != null && !Number.isNaN(c)) nonNullIndexes.push(i);
+  });
+  if (nonNullIndexes.length === 0) return undefined;
+
+  const lastIdx = nonNullIndexes[nonNullIndexes.length - 1];
+  const lastClose = closes[lastIdx] as number;
+
+  // If the last bar's close doesn't match the live price, treat it as
+  // today's still-forming bar and use it as the "previous close" baseline.
+  const lastBarIsToday = Math.abs(lastClose - latestPrice) < 0.005;
+
+  if (lastBarIsToday) {
+    if (nonNullIndexes.length < 2) return undefined;
+    return closes[nonNullIndexes[nonNullIndexes.length - 2]] as number;
+  }
+  return lastClose;
+}
 
 export async function fetchYahooFinanceQuote(
   market: string,
@@ -104,7 +139,7 @@ export async function fetchYahooFinanceQuote(
     : new Date().toISOString().split("T")[0];
 
   const currency = meta.currency ?? MARKET_CURRENCY[market] ?? "USD";
-  const priorClose = meta.chartPreviousClose ?? 0;
+  const priorClose = derivePriorClose(result, price) ?? meta.chartPreviousClose ?? 0;
   const change = round2(price - priorClose);
   const changePercent = priorClose === 0 ? 0 : round2((change / priorClose) * 100);
 
